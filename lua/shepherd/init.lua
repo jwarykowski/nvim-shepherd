@@ -4,6 +4,7 @@ local config = {
 	cmd = "shepherd",
 	filter = nil, -- string | fun():string | nil
 	float = { width = 0.8, height = 0.8, border = "rounded" },
+	status = { icon = "" }, -- prefix for M.status(), e.g. a nerd-font glyph
 }
 
 -- binary returns the configured shepherd command (used by the health check).
@@ -24,6 +25,7 @@ local function run(args, ok_msg)
 				if ok_msg then
 					vim.notify("shepherd: " .. ok_msg)
 				end
+				M.refresh() -- counts changed
 			else
 				vim.notify("shepherd: " .. ((r.stderr or ""):gsub("%s+$", "")), vim.log.levels.ERROR)
 			end
@@ -114,6 +116,47 @@ local function label(it)
 	return string.format("%s %s%s%s", mark, it.text, cat, pr)
 end
 
+-- statusline counts, refreshed async. `ready` gates the first render.
+local counts = { open = 0, overdue = 0, ready = false }
+
+-- refresh recomputes the open/overdue counts and fires User
+-- ShepherdStatusUpdate so a statusline can redraw. `list --json` is unfiltered,
+-- so counts are global (all todos), not scoped to `config.filter`.
+function M.refresh()
+	list(function(items)
+		local open, overdue = 0, 0
+		local today = os.date("%Y-%m-%d")
+		for _, it in ipairs(items) do
+			if not it.done then
+				open = open + 1
+				if it.due and it.due ~= "" and it.due < today then
+					overdue = overdue + 1
+				end
+			end
+		end
+		counts.open, counts.overdue, counts.ready = open, overdue, true
+		vim.api.nvim_exec_autocmds("User", { pattern = "ShepherdStatusUpdate" })
+	end)
+end
+
+-- status returns a statusline string: "" when empty/loading, else the open
+-- count with the configured icon and an overdue suffix.
+function M.status()
+	if not counts.ready then
+		M.refresh()
+		return ""
+	end
+	if counts.open == 0 then
+		return ""
+	end
+	local icon = config.status.icon
+	local s = (icon ~= "" and (icon .. " ") or "") .. counts.open .. (icon ~= "" and "" or " todo")
+	if counts.overdue > 0 then
+		s = s .. " (" .. counts.overdue .. " overdue)"
+	end
+	return s
+end
+
 -- pick shows all items, then a done/undone/rm action on the chosen one.
 function M.pick()
 	list(function(items)
@@ -187,6 +230,14 @@ function M.setup(opts)
 	vim.api.nvim_create_user_command("ShepherdCapture", function(a)
 		M.capture({ range = a.range, line1 = a.line1, line2 = a.line2 })
 	end, { nargs = 0, range = true, desc = "capture current line / selection as a todo" })
+
+	-- keep statusline counts fresh across external edits / other tabs
+	vim.api.nvim_create_autocmd("FocusGained", {
+		group = vim.api.nvim_create_augroup("shepherd", { clear = true }),
+		callback = function()
+			M.refresh()
+		end,
+	})
 end
 
 return M
