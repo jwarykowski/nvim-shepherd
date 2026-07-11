@@ -1,11 +1,13 @@
 local M = {}
 
-local config = {
+local defaults = {
 	cmd = "shepherd",
 	filter = nil, -- string | fun():string | nil
 	float = { width = 0.8, height = 0.8, border = "rounded" },
 	status = { icon = "" }, -- prefix for M.status(), e.g. a nerd-font glyph
 }
+
+local config = vim.tbl_deep_extend("force", {}, defaults)
 
 -- binary returns the configured shepherd command (used by the health check).
 function M.binary()
@@ -119,22 +121,40 @@ end
 -- statusline counts, refreshed async. `ready` gates the first render.
 local counts = { open = 0, overdue = 0, ready = false }
 
+-- tally counts open items and those overdue relative to today (ISO date).
+local function tally(items, today)
+	local open, overdue = 0, 0
+	for _, it in ipairs(items) do
+		if not it.done then
+			open = open + 1
+			if it.due and it.due ~= "" and it.due < today then
+				overdue = overdue + 1
+			end
+		end
+	end
+	return open, overdue
+end
+
+-- format_status renders the counts: "" when nothing open, else the open count
+-- with the configured icon prefix and an overdue suffix.
+local function format_status(open, overdue, icon)
+	if open == 0 then
+		return ""
+	end
+	local s = (icon ~= "" and (icon .. " ") or "") .. open .. (icon ~= "" and "" or " todo")
+	if overdue > 0 then
+		s = s .. " (" .. overdue .. " overdue)"
+	end
+	return s
+end
+
 -- refresh recomputes the open/overdue counts and fires User
 -- ShepherdStatusUpdate so a statusline can redraw. `list --json` is unfiltered,
 -- so counts are global (all todos), not scoped to `config.filter`.
 function M.refresh()
 	list(function(items)
-		local open, overdue = 0, 0
-		local today = os.date("%Y-%m-%d")
-		for _, it in ipairs(items) do
-			if not it.done then
-				open = open + 1
-				if it.due and it.due ~= "" and it.due < today then
-					overdue = overdue + 1
-				end
-			end
-		end
-		counts.open, counts.overdue, counts.ready = open, overdue, true
+		counts.open, counts.overdue = tally(items, os.date("%Y-%m-%d"))
+		counts.ready = true
 		vim.api.nvim_exec_autocmds("User", { pattern = "ShepherdStatusUpdate" })
 	end)
 end
@@ -146,15 +166,7 @@ function M.status()
 		M.refresh()
 		return ""
 	end
-	if counts.open == 0 then
-		return ""
-	end
-	local icon = config.status.icon
-	local s = (icon ~= "" and (icon .. " ") or "") .. counts.open .. (icon ~= "" and "" or " todo")
-	if counts.overdue > 0 then
-		s = s .. " (" .. counts.overdue .. " overdue)"
-	end
-	return s
+	return format_status(counts.open, counts.overdue, config.status.icon)
 end
 
 -- pick shows all items, then a done/undone/rm action on the chosen one.
@@ -182,7 +194,7 @@ end
 -- becomes plain task text.
 local function clean(s)
 	s = s:gsub("^%s+", ""):gsub("%s+$", "")
-	s = s:gsub("^[%-/#*;\"%%]+%s*", "")
+	s = s:gsub('^[%-/#*;"%%]+%s*', "")
 	s = s:gsub("^[Tt][Oo][Dd][Oo]%s*:?%s*", "")
 	s = s:gsub("^[Ff][Ii][Xx][Mm][Ee]%s*:?%s*", "")
 	return s
@@ -209,7 +221,7 @@ function M.capture(opts)
 end
 
 function M.setup(opts)
-	config = vim.tbl_deep_extend("force", config, opts or {})
+	config = vim.tbl_deep_extend("force", {}, defaults, opts or {})
 
 	vim.api.nvim_create_user_command("Shepherd", function(a)
 		M.open(a.args ~= "" and a.args or nil)
@@ -239,5 +251,18 @@ function M.setup(opts)
 		end,
 	})
 end
+
+-- _internal exposes pure helpers for the test suite; not part of the public API.
+M._internal = {
+	tally = tally,
+	format_status = format_status,
+	label = label,
+	clean = clean,
+	build_cmd = build_cmd,
+	resolve_filter = resolve_filter,
+	set_config = function(c)
+		config = vim.tbl_deep_extend("force", {}, defaults, c or {})
+	end,
+}
 
 return M

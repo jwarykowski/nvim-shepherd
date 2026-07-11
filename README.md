@@ -9,6 +9,7 @@ buffer. Zero dependencies; drives the installed `shepherd` binary.
 - [usage](#usage)
 - [statusline](#statusline)
 - [configuration](#configuration)
+- [development](#development)
 
 ## requirements
 
@@ -116,3 +117,21 @@ require("shepherd").setup({
 - `float` — fractions of the editor size, and the window border.
 - `status.icon` — prefix for `status()`. With an icon it renders `<icon> 3`;
   empty renders `3 todo`.
+
+## development
+
+Tooling: [stylua](https://github.com/JohnnyMorganz/StyLua),
+[luacheck](https://github.com/lunarmodules/luacheck), and
+[busted](https://lunarmodules.github.io/busted/) + `nlua` (tests run under
+Neovim). Install the test deps with `luarocks install busted nlua`.
+
+```sh
+make fmt     # format
+make lint    # stylua --check + luacheck
+make test    # busted
+make check   # lint + test
+```
+
+CI (`.github/workflows/pull-request.yml`) runs lint plus the suite on Neovim
+stable and nightly. Tests cover the pure helpers (`tally`, `format_status`, `label`,
+`clean`, `build_cmd`/filter resolution) via the `_internal` table.
