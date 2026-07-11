@@ -1,0 +1,9 @@
+return {
+	default = {
+		lua = "nlua",
+		verbose = true,
+		["auto-insulate"] = false,
+		ROOT = { "tests" },
+		lpath = "lua/?.lua;lua/?/init.lua",
+	},
+}
