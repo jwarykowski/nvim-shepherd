@@ -7,6 +7,7 @@ buffer. Zero dependencies; drives the installed `shepherd` binary.
 - [requirements](#requirements)
 - [install](#install)
 - [usage](#usage)
+- [statusline](#statusline)
 - [configuration](#configuration)
 
 ## requirements
@@ -63,6 +64,40 @@ return {
 
 Run `:checkhealth shepherd` to verify the binary is found.
 
+## statusline
+
+`require("shepherd").status()` returns a short string — the open count, plus an
+overdue suffix — or `""` when there's nothing open or the count hasn't loaded
+yet. Counts refresh after any add/done/rm you make and on `FocusGained`; call
+`require("shepherd").refresh()` to force it.
+
+lualine:
+
+```lua
+require("lualine").setup({
+	sections = {
+		lualine_x = { { function() return require("shepherd").status() end } },
+	},
+})
+```
+
+Native statusline:
+
+```lua
+vim.o.statusline = "%{v:lua.require'shepherd'.status()}"
+```
+
+The count is unfiltered (all todos), independent of `config.filter`. A refresh
+fires the `User ShepherdStatusUpdate` autocmd — hook it if your statusline
+needs a manual redraw:
+
+```lua
+vim.api.nvim_create_autocmd("User", {
+	pattern = "ShepherdStatusUpdate",
+	callback = function() vim.cmd.redrawstatus() end,
+})
+```
+
 ## configuration
 
 Defaults:
@@ -72,9 +107,12 @@ require("shepherd").setup({
 	cmd = "shepherd",        -- binary name / path
 	filter = nil,            -- string | fun():string | nil — passed as --filter
 	float = { width = 0.8, height = 0.8, border = "rounded" },
+	status = { icon = "" },  -- prefix for status(); e.g. a nerd-font glyph
 })
 ```
 
 - `filter` — a string, or a function returning one (evaluated on each open, so
   it can track the current project). `nil`/empty means no filter.
 - `float` — fractions of the editor size, and the window border.
+- `status.icon` — prefix for `status()`. With an icon it renders `<icon> 3`;
+  empty renders `3 todo`.
