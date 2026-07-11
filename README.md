@@ -23,10 +23,13 @@ plugin list:
 ```lua
 return {
 	"jwarykowski/nvim-shepherd",
-	cmd = { "Shepherd", "ShepherdAdd" },
+	cmd = { "Shepherd", "ShepherdAdd", "ShepherdList", "ShepherdCapture" },
 	keys = {
 		{ "<leader>T", "<cmd>Shepherd<cr>", desc = "shepherd board" },
 		{ "<leader>ta", "<cmd>ShepherdAdd<cr>", desc = "shepherd quick-add" },
+		{ "<leader>tl", "<cmd>ShepherdList<cr>", desc = "shepherd list / pick" },
+		{ "<leader>tc", "<cmd>ShepherdCapture<cr>", desc = "shepherd capture line" },
+		{ "<leader>tc", ":ShepherdCapture<cr>", mode = "x", desc = "shepherd capture selection" },
 	},
 	opts = {
 		-- board scoped to the repo you're in
@@ -45,10 +48,20 @@ return {
 
 - `:Shepherd` — open the board in a floating terminal. Closes when shepherd
   exits (`q`).
+- `:Shepherd work` — open with an explicit filter, overriding the configured
+  one for that view.
 - `:ShepherdAdd` — prompt for a todo, then `shepherd add` it. An open board
   reloads and shows it within ~2s.
 - `:ShepherdAdd deploy api @work !h due:tomorrow` — add directly, with the same
   quick-add tokens the board accepts.
+- `:ShepherdList` — pick an item (`vim.ui.select`), then mark it done/undone or
+  remove it. Uses whatever `vim.ui.select` UI you have (dressing, snacks,
+  telescope-ui-select), or the built-in menu.
+- `:ShepherdCapture` — turn the current line into a todo; in visual mode
+  (`:'<,'>ShepherdCapture`) the selection. Strips a leading comment marker and
+  `TODO:`/`FIXME:`, then opens the add prompt pre-filled so you can tweak it.
+
+Run `:checkhealth shepherd` to verify the binary is found.
 
 ## configuration
 

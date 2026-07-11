@@ -6,9 +6,44 @@ local config = {
 	float = { width = 0.8, height = 0.8, border = "rounded" },
 }
 
-local function build_cmd()
+-- binary returns the configured shepherd command (used by the health check).
+function M.binary()
+	return config.cmd
+end
+
+-- run invokes the shepherd CLI async; notifies on failure, and on success only
+-- when ok_msg is given.
+local function run(args, ok_msg)
+	local cmd = { config.cmd }
+	for _, a in ipairs(args) do
+		cmd[#cmd + 1] = a
+	end
+	vim.system(cmd, { text = true }, function(r)
+		vim.schedule(function()
+			if r.code == 0 then
+				if ok_msg then
+					vim.notify("shepherd: " .. ok_msg)
+				end
+			else
+				vim.notify("shepherd: " .. ((r.stderr or ""):gsub("%s+$", "")), vim.log.levels.ERROR)
+			end
+		end)
+	end)
+end
+
+-- resolve_filter returns the effective filter: an explicit override, else the
+-- configured string/function, else nil.
+local function resolve_filter(override)
+	if override ~= nil then
+		return override
+	end
+	local f = config.filter
+	return type(f) == "function" and f() or f
+end
+
+local function build_cmd(filter_override)
 	local parts = { config.cmd }
-	local f = type(config.filter) == "function" and config.filter() or config.filter
+	local f = resolve_filter(filter_override)
 	if f and f ~= "" then
 		parts[#parts + 1] = "--filter"
 		parts[#parts + 1] = f
@@ -16,7 +51,7 @@ local function build_cmd()
 	return parts
 end
 
-function M.open()
+function M.open(filter)
 	local cols, rows = vim.o.columns, vim.o.lines
 	local w = math.floor(cols * config.float.width)
 	local h = math.floor(rows * config.float.height)
@@ -30,7 +65,7 @@ function M.open()
 		style = "minimal",
 		border = config.float.border,
 	})
-	vim.fn.jobstart(build_cmd(), {
+	vim.fn.jobstart(build_cmd(filter), {
 		term = true,
 		on_exit = function()
 			if vim.api.nvim_win_is_valid(win) then
@@ -45,15 +80,7 @@ function M.add(text)
 	if not text or text == "" then
 		return
 	end
-	vim.system({ config.cmd, "add", text }, {}, function(r)
-		vim.schedule(function()
-			if r.code == 0 then
-				vim.notify("shepherd: added")
-			else
-				vim.notify("shepherd: " .. ((r.stderr or ""):gsub("%s+$", "")), vim.log.levels.ERROR)
-			end
-		end)
-	end)
+	run({ "add", text }, "added")
 end
 
 function M.quick_add()
@@ -62,18 +89,104 @@ function M.quick_add()
 	end)
 end
 
+-- list fetches items via `list --json` and passes the decoded array to cb.
+local function list(cb)
+	vim.system({ config.cmd, "list", "--json" }, { text = true }, function(r)
+		vim.schedule(function()
+			if r.code ~= 0 then
+				vim.notify("shepherd: " .. ((r.stderr or ""):gsub("%s+$", "")), vim.log.levels.ERROR)
+				return
+			end
+			local ok, items = pcall(vim.json.decode, r.stdout)
+			if not ok then
+				vim.notify("shepherd: could not parse `list --json`", vim.log.levels.ERROR)
+				return
+			end
+			cb(items or {})
+		end)
+	end)
+end
+
+local function label(it)
+	local mark = it.done and "[x]" or "[ ]"
+	local cat = (it.category and it.category ~= "") and (" @" .. it.category) or ""
+	local pr = (it.priority and it.priority ~= "") and (" !" .. it.priority:lower()) or ""
+	return string.format("%s %s%s%s", mark, it.text, cat, pr)
+end
+
+-- pick shows all items, then a done/undone/rm action on the chosen one.
+function M.pick()
+	list(function(items)
+		if #items == 0 then
+			vim.notify("shepherd: no items")
+			return
+		end
+		vim.ui.select(items, { prompt = "shepherd", format_item = label }, function(choice)
+			if not choice then
+				return
+			end
+			local toggle = choice.done and "undone" or "done"
+			vim.ui.select({ toggle, "rm" }, { prompt = choice.text }, function(act)
+				if act then
+					run({ act, tostring(choice.index) }, act .. " " .. choice.index)
+				end
+			end)
+		end)
+	end)
+end
+
+-- clean strips a leading comment marker and TODO/FIXME tag so a code comment
+-- becomes plain task text.
+local function clean(s)
+	s = s:gsub("^%s+", ""):gsub("%s+$", "")
+	s = s:gsub("^[%-/#*;\"%%]+%s*", "")
+	s = s:gsub("^[Tt][Oo][Dd][Oo]%s*:?%s*", "")
+	s = s:gsub("^[Ff][Ii][Xx][Mm][Ee]%s*:?%s*", "")
+	return s
+end
+
+-- capture seeds the add prompt from the current line, or the selected lines
+-- when invoked with a range.
+function M.capture(opts)
+	opts = opts or {}
+	local text
+	if opts.range and opts.range > 0 then
+		local lines = vim.api.nvim_buf_get_lines(0, opts.line1 - 1, opts.line2, false)
+		text = table.concat(lines, " ")
+	else
+		text = vim.api.nvim_get_current_line()
+	end
+	text = clean(text)
+	if text == "" then
+		return
+	end
+	vim.ui.input({ prompt = "todo: ", default = text }, function(v)
+		M.add(v)
+	end)
+end
+
 function M.setup(opts)
 	config = vim.tbl_deep_extend("force", config, opts or {})
-	vim.api.nvim_create_user_command("Shepherd", function()
-		M.open()
-	end, {})
+
+	vim.api.nvim_create_user_command("Shepherd", function(a)
+		M.open(a.args ~= "" and a.args or nil)
+	end, { nargs = "?", desc = "open the shepherd board (optional filter)" })
+
 	vim.api.nvim_create_user_command("ShepherdAdd", function(a)
 		if a.args ~= "" then
 			M.add(a.args)
 		else
 			M.quick_add()
 		end
-	end, { nargs = "*" })
+	end, { nargs = "*", desc = "add a todo (args or prompt)" })
+
+	vim.api.nvim_create_user_command("ShepherdList", function()
+		M.pick()
+	end, { desc = "pick a todo and act on it" })
+
+	vim.api.nvim_create_user_command("ShepherdCapture", function(a)
+		M.capture({ range = a.range, line1 = a.line1, line2 = a.line2 })
+	end, { nargs = 0, range = true, desc = "capture current line / selection as a todo" })
 end
 
 return M
