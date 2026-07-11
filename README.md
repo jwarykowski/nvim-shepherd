@@ -16,10 +16,12 @@ buffer. Zero dependencies; drives the installed `shepherd` binary.
 
 ## install
 
-lazy.nvim:
+lazy.nvim — add the spec. With a structured config (e.g. LazyVim), drop it in
+its own file at `lua/plugins/shepherd.lua`; otherwise add it to your existing
+plugin list:
 
 ```lua
-{
+return {
 	"jwarykowski/nvim-shepherd",
 	cmd = { "Shepherd", "ShepherdAdd" },
 	keys = {
@@ -35,7 +37,9 @@ lazy.nvim:
 }
 ```
 
-`opts` (even `{}`) triggers `setup()`, which registers the commands.
+`opts` (even `{}`) triggers `setup()`, which registers the commands. `cmd` and
+`keys` lazy-load the plugin — it loads on first `:Shepherd`, `<leader>T`, or
+`<leader>ta`.
 
 ## usage
 
