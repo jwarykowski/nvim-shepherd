@@ -95,6 +95,7 @@ function M.open(filter, all)
 			if vim.api.nvim_win_is_valid(win) then
 				vim.api.nvim_win_close(win, true)
 			end
+			M.refresh() -- board edits change counts
 		end,
 	})
 	vim.cmd("startinsert")
