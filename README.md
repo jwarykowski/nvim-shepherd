@@ -28,14 +28,15 @@ return {
 	cmd = { "Shepherd", "ShepherdAdd", "ShepherdList", "ShepherdCapture" },
 	keys = {
 		{ "<leader>T", "<cmd>Shepherd<cr>", desc = "shepherd board" },
+		{ "<leader>tg", "<cmd>Shepherd!<cr>", desc = "shepherd global view (all boards)" },
 		{ "<leader>ta", "<cmd>ShepherdAdd<cr>", desc = "shepherd quick-add" },
 		{ "<leader>tl", "<cmd>ShepherdList<cr>", desc = "shepherd list / pick" },
 		{ "<leader>tc", "<cmd>ShepherdCapture<cr>", desc = "shepherd capture line" },
 		{ "<leader>tc", ":ShepherdCapture<cr>", mode = "x", desc = "shepherd capture selection" },
 	},
 	opts = {
-		-- board scoped to the repo you're in
-		filter = function()
+		-- per-repo project board (own file under ~/.config/shepherd/projects/)
+		project = function()
 			return vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
 		end,
 	},
@@ -52,6 +53,8 @@ return {
   exits (`q`).
 - `:Shepherd work` — open with an explicit filter, overriding the configured
   one for that view.
+- `:Shepherd!` — open the read-only global view across all project boards
+  (`shepherd --all`).
 - `:ShepherdAdd` — prompt for a todo, then `shepherd add` it. An open board
   reloads and shows it within ~2s.
 - `:ShepherdAdd deploy api @work !h due:tomorrow` — add directly, with the same
@@ -88,7 +91,8 @@ Native statusline:
 vim.o.statusline = "%{v:lua.require'shepherd'.status()}"
 ```
 
-The count is unfiltered (all todos), independent of `config.filter`. A refresh
+The count covers the configured project's board (all todos on it, independent
+of `config.filter`); with no `project` set, the default board. A refresh
 fires the `User ShepherdStatusUpdate` autocmd — hook it if your statusline
 needs a manual redraw:
 
@@ -107,6 +111,7 @@ Defaults:
 require("shepherd").setup({
 	cmd = "shepherd",        -- binary name / path
 	filter = nil,            -- string | fun():string | nil — passed as --filter
+	project = nil,           -- string | fun():string | nil — passed as --project
 	float = { width = 0.8, height = 0.8, border = "rounded" },
 	status = { icon = "" },  -- prefix for status(); e.g. a nerd-font glyph
 })
@@ -114,6 +119,10 @@ require("shepherd").setup({
 
 - `filter` — a string, or a function returning one (evaluated on each open, so
   it can track the current project). `nil`/empty means no filter.
+- `project` — a shepherd project board name (string or function, e.g. derive it
+  from the cwd). Scopes everything — board, add, list/pick, statusline counts —
+  to `~/.config/shepherd/projects/<name>.md`. `nil`/empty uses the default
+  board. `:Shepherd!` ignores it and shows all boards.
 - `float` — fractions of the editor size, and the window border.
 - `status.icon` — prefix for `status()`. With an icon it renders `<icon> 3`;
   empty renders `3 todo`.
