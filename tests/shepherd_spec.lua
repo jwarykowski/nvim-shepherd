@@ -102,4 +102,49 @@ describe("build_cmd / resolve_filter", function()
 		internal.set_config({ filter = "work" })
 		assert.same({ "shepherd", "--filter", "other" }, internal.build_cmd("other"))
 	end)
+
+	it("passes a string project", function()
+		internal.set_config({ project = "web" })
+		assert.same({ "shepherd", "--project", "web" }, internal.build_cmd())
+	end)
+
+	it("evaluates a function project", function()
+		internal.set_config({
+			project = function()
+				return "web"
+			end,
+		})
+		assert.same({ "shepherd", "--project", "web" }, internal.build_cmd())
+	end)
+
+	it("combines project and filter", function()
+		internal.set_config({ project = "web", filter = "work" })
+		assert.same({ "shepherd", "--project", "web", "--filter", "work" }, internal.build_cmd())
+	end)
+
+	it("emits --all for the global view, dropping the project", function()
+		internal.set_config({ project = "web" })
+		assert.same({ "shepherd", "--all" }, internal.build_cmd(nil, true))
+	end)
+
+	it("keeps the filter in the global view", function()
+		internal.set_config({ project = "web", filter = "work" })
+		assert.same({ "shepherd", "--all", "--filter", "work" }, internal.build_cmd(nil, true))
+	end)
+end)
+
+describe("with_project", function()
+	after_each(function()
+		internal.set_config({})
+	end)
+
+	it("appends --project after the verb args", function()
+		internal.set_config({ project = "web" })
+		assert.same({ "shepherd", "add", "x", "--project", "web" }, internal.with_project({ "shepherd", "add", "x" }))
+	end)
+
+	it("is a no-op without a project", function()
+		internal.set_config({})
+		assert.same({ "shepherd", "list", "--json" }, internal.with_project({ "shepherd", "list", "--json" }))
+	end)
 end)

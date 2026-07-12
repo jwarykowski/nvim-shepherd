@@ -3,6 +3,7 @@ local M = {}
 local defaults = {
 	cmd = "shepherd",
 	filter = nil, -- string | fun():string | nil
+	project = nil, -- string | fun():string | nil
 	float = { width = 0.8, height = 0.8, border = "rounded" },
 	status = { icon = "" }, -- prefix for M.status(), e.g. a nerd-font glyph
 }
@@ -14,13 +15,27 @@ function M.binary()
 	return config.cmd
 end
 
+-- with_project appends "--project <name>" to cmd when one is configured
+-- (string or function). Shepherd wants flags after the verb.
+local function with_project(cmd)
+	local p = config.project
+	p = type(p) == "function" and p() or p
+	if p and p ~= "" then
+		cmd[#cmd + 1] = "--project"
+		cmd[#cmd + 1] = p
+	end
+	return cmd
+end
+
 -- run invokes the shepherd CLI async; notifies on failure, and on success only
--- when ok_msg is given.
+-- when ok_msg is given. Project-scoped so mutations land on the same board
+-- list()/pick() read.
 local function run(args, ok_msg)
 	local cmd = { config.cmd }
 	for _, a in ipairs(args) do
 		cmd[#cmd + 1] = a
 	end
+	with_project(cmd)
 	vim.system(cmd, { text = true }, function(r)
 		vim.schedule(function()
 			if r.code == 0 then
@@ -45,8 +60,13 @@ local function resolve_filter(override)
 	return type(f) == "function" and f() or f
 end
 
-local function build_cmd(filter_override)
+local function build_cmd(filter_override, all)
 	local parts = { config.cmd }
+	if all then
+		parts[#parts + 1] = "--all"
+	else
+		with_project(parts)
+	end
 	local f = resolve_filter(filter_override)
 	if f and f ~= "" then
 		parts[#parts + 1] = "--filter"
@@ -55,7 +75,7 @@ local function build_cmd(filter_override)
 	return parts
 end
 
-function M.open(filter)
+function M.open(filter, all)
 	local cols, rows = vim.o.columns, vim.o.lines
 	local w = math.floor(cols * config.float.width)
 	local h = math.floor(rows * config.float.height)
@@ -69,12 +89,13 @@ function M.open(filter)
 		style = "minimal",
 		border = config.float.border,
 	})
-	vim.fn.jobstart(build_cmd(filter), {
+	vim.fn.jobstart(build_cmd(filter, all), {
 		term = true,
 		on_exit = function()
 			if vim.api.nvim_win_is_valid(win) then
 				vim.api.nvim_win_close(win, true)
 			end
+			M.refresh() -- board edits change counts
 		end,
 	})
 	vim.cmd("startinsert")
@@ -93,9 +114,10 @@ function M.quick_add()
 	end)
 end
 
--- list fetches items via `list --json` and passes the decoded array to cb.
+-- list fetches items via `list --json` (scoped to the configured project) and
+-- passes the decoded array to cb.
 local function list(cb)
-	vim.system({ config.cmd, "list", "--json" }, { text = true }, function(r)
+	vim.system(with_project({ config.cmd, "list", "--json" }), { text = true }, function(r)
 		vim.schedule(function()
 			if r.code ~= 0 then
 				vim.notify("shepherd: " .. ((r.stderr or ""):gsub("%s+$", "")), vim.log.levels.ERROR)
@@ -149,8 +171,8 @@ local function format_status(open, overdue, icon)
 end
 
 -- refresh recomputes the open/overdue counts and fires User
--- ShepherdStatusUpdate so a statusline can redraw. `list --json` is unfiltered,
--- so counts are global (all todos), not scoped to `config.filter`.
+-- ShepherdStatusUpdate so a statusline can redraw. Counts cover the configured
+-- project's whole board (not scoped to `config.filter`).
 function M.refresh()
 	list(function(items)
 		counts.open, counts.overdue = tally(items, os.date("%Y-%m-%d"))
@@ -224,8 +246,8 @@ function M.setup(opts)
 	config = vim.tbl_deep_extend("force", {}, defaults, opts or {})
 
 	vim.api.nvim_create_user_command("Shepherd", function(a)
-		M.open(a.args ~= "" and a.args or nil)
-	end, { nargs = "?", desc = "open the shepherd board (optional filter)" })
+		M.open(a.args ~= "" and a.args or nil, a.bang)
+	end, { nargs = "?", bang = true, desc = "open the shepherd board (! = global view, optional filter)" })
 
 	vim.api.nvim_create_user_command("ShepherdAdd", function(a)
 		if a.args ~= "" then
@@ -260,6 +282,7 @@ M._internal = {
 	clean = clean,
 	build_cmd = build_cmd,
 	resolve_filter = resolve_filter,
+	with_project = with_project,
 	set_config = function(c)
 		config = vim.tbl_deep_extend("force", {}, defaults, c or {})
 	end,
