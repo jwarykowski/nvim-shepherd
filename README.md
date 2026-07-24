@@ -80,10 +80,12 @@ return {
   across all boards (read-only — items show their `[board]`; only open-link is
   offered).
 - `:ShepherdStats` — open shepherd's stats charts in the floating terminal.
-- `:ShepherdBoards` — pick a board (shows `open/total`, `*` marks current),
-  then **switch** the session to it, **rename**, **archive**, or **delete** it
-  (delete shows a dry-run preview and asks to confirm first). Switching overrides
-  the configured `board` until you switch again or restart.
+- `:ShepherdBoards` — pick a board (shows `open/total`, `*` marks current, and
+  its working **dir** if set), then **switch** the session to it, **rename**,
+  set its **dir** (working directory; empty clears), **archive**, or **delete**
+  it (delete shows a dry-run preview and asks to confirm first). Switching
+  overrides the configured `board` until you switch again or restart, and
+  `:tcd`s to the board's dir when it has one.
 - `:ShepherdBoardsArchived` — pick an archived board to unarchive.
 - `:ShepherdCapture` — turn the current line into a todo; in visual mode
   (`:'<,'>ShepherdCapture`) the selection. Strips a leading comment marker and
