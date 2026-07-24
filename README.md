@@ -72,7 +72,8 @@ return {
 - `:ShepherdList` — pick an item (`vim.ui.select`), then act on it: toggle
   done/undone, **edit** (a pre-filled quick-add line — text, `@category`,
   `!priority`, `due:`, `defer:`, `link:`, `note:`), set a **status**, add a
-  **subtask**, **rm**, or **open link** when it has one. Subtasks show indented
+  **subtask**, **archive** it (whole items only), **rm**, or **open link** when
+  it has one. Subtasks show indented
   under their parent and take the same actions. Uses whatever `vim.ui.select` UI
   you have (dressing, snacks, telescope-ui-select), or the built-in menu.
 - `:ShepherdList work` — pick within a filtered view. `:ShepherdList!` picks
