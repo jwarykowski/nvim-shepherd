@@ -28,7 +28,11 @@ local function fetch(args, cb)
 end
 
 local function plabel(b)
-	return string.format("%s %s (%d/%d)", b.current and "*" or " ", b.name, b.open, b.total)
+	local s = string.format("%s %s (%d/%d)", b.current and "*" or " ", b.name, b.open, b.total)
+	if b.dir and b.dir ~= "" then
+		s = s .. "  " .. vim.fn.fnamemodify(b.dir, ":~")
+	end
+	return s
 end
 
 -- confirm_delete previews the removal with --dry-run, then requires an explicit
@@ -57,11 +61,21 @@ function M.switch()
 			if not b then
 				return
 			end
-			vim.ui.select({ "switch", "rename", "archive", "delete" }, { prompt = b.name }, function(act)
+			vim.ui.select({ "switch", "rename", "dir", "archive", "delete" }, { prompt = b.name }, function(act)
 				if act == "switch" then
 					sh.set_active_board(b.name)
+					if b.dir and b.dir ~= "" then
+						vim.cmd.tcd(vim.fn.fnamemodify(b.dir, ":p"))
+					end
 					sh.refresh()
 					vim.notify("shepherd: board " .. b.name)
+				elseif act == "dir" then
+					-- omit to show is CLI-only; here empty clears, a path sets it
+					vim.ui.input({ prompt = "dir: ", default = b.dir or "" }, function(v)
+						if v ~= nil then
+							sh._run({ "board", "dir", b.name, v }, "dir " .. b.name, { no_board = true })
+						end
+					end)
 				elseif act == "rename" then
 					vim.ui.input({ prompt = "rename to: ", default = b.name }, function(v)
 						if v and v ~= "" and v ~= b.name then
