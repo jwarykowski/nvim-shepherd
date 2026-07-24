@@ -3,39 +3,56 @@ local M = {}
 local defaults = {
 	cmd = "shepherd",
 	filter = nil, -- string | fun():string | nil
-	project = nil, -- string | fun():string | nil
+	board = nil, -- string | fun():string | nil
 	float = { width = 0.8, height = 0.8, border = "rounded" },
 	status = { icon = "" }, -- prefix for M.status(), e.g. a nerd-font glyph
 }
 
 local config = vim.tbl_deep_extend("force", {}, defaults)
 
+-- active_board is a session override set by the board switcher. When non-nil
+-- it wins over config.board; "default" means the unscoped default board.
+local active_board = nil
+
 -- binary returns the configured shepherd command (used by the health check).
 function M.binary()
 	return config.cmd
 end
 
--- with_project appends "--project <name>" to cmd when one is configured
--- (string or function). Shepherd wants flags after the verb.
-local function with_project(cmd)
-	local p = config.project
-	p = type(p) == "function" and p() or p
-	if p and p ~= "" then
-		cmd[#cmd + 1] = "--project"
+-- set_active_board switches the board the session targets, overriding
+-- config.board until changed again.
+function M.set_active_board(name)
+	active_board = name
+end
+
+-- with_board appends "--board <name>" to cmd when one is in effect: the
+-- session override if set, else the configured string/function. Shepherd wants
+-- flags after the verb.
+local function with_board(cmd)
+	local p = active_board
+	if p == nil then
+		p = config.board
+		p = type(p) == "function" and p() or p
+	end
+	if p and p ~= "" and p ~= "default" then
+		cmd[#cmd + 1] = "--board"
 		cmd[#cmd + 1] = p
 	end
 	return cmd
 end
 
 -- run invokes the shepherd CLI async; notifies on failure, and on success only
--- when ok_msg is given. Project-scoped so mutations land on the same board
--- list()/pick() read.
-local function run(args, ok_msg)
+-- when ok_msg is given. Board-scoped so mutations land on the same board
+-- list()/pick() read, unless opts.no_board is set (board verbs name their
+-- target explicitly).
+local function run(args, ok_msg, opts)
 	local cmd = { config.cmd }
 	for _, a in ipairs(args) do
 		cmd[#cmd + 1] = a
 	end
-	with_project(cmd)
+	if not (opts and opts.no_board) then
+		with_board(cmd)
+	end
 	vim.system(cmd, { text = true }, function(r)
 		vim.schedule(function()
 			if r.code == 0 then
@@ -65,7 +82,7 @@ local function build_cmd(filter_override, all)
 	if all then
 		parts[#parts + 1] = "--all"
 	else
-		with_project(parts)
+		with_board(parts)
 	end
 	local f = resolve_filter(filter_override)
 	if f and f ~= "" then
@@ -75,7 +92,9 @@ local function build_cmd(filter_override, all)
 	return parts
 end
 
-function M.open(filter, all)
+-- float_term runs argv in a terminal inside a centered floating window that
+-- closes when the process exits, then refreshes counts. Shared by open/stats.
+local function float_term(argv)
 	local cols, rows = vim.o.columns, vim.o.lines
 	local w = math.floor(cols * config.float.width)
 	local h = math.floor(rows * config.float.height)
@@ -89,7 +108,7 @@ function M.open(filter, all)
 		style = "minimal",
 		border = config.float.border,
 	})
-	vim.fn.jobstart(build_cmd(filter, all), {
+	vim.fn.jobstart(argv, {
 		term = true,
 		on_exit = function()
 			if vim.api.nvim_win_is_valid(win) then
@@ -99,6 +118,15 @@ function M.open(filter, all)
 		end,
 	})
 	vim.cmd("startinsert")
+end
+
+function M.open(filter, all)
+	float_term(build_cmd(filter, all))
+end
+
+-- stats opens shepherd's native terminal chart view in the float.
+function M.stats()
+	float_term({ config.cmd, "stats" })
 end
 
 function M.add(text)
@@ -114,10 +142,22 @@ function M.quick_add()
 	end)
 end
 
--- list fetches items via `list --json` (scoped to the configured project) and
--- passes the decoded array to cb.
-local function list(cb)
-	vim.system(with_project({ config.cmd, "list", "--json" }), { text = true }, function(r)
+-- list fetches items via `list --json` and passes the decoded array to cb.
+-- Scoped to the current board unless `all` (read-only aggregate across every
+-- board). An explicit `filter` narrows the result; the configured config.filter
+-- is deliberately NOT applied so counts cover the whole board.
+local function list(cb, filter, all)
+	local cmd = { config.cmd, "list", "--json" }
+	if all then
+		cmd[#cmd + 1] = "--all"
+	else
+		with_board(cmd)
+	end
+	if filter and filter ~= "" then
+		cmd[#cmd + 1] = "--filter"
+		cmd[#cmd + 1] = filter
+	end
+	vim.system(cmd, { text = true }, function(r)
 		vim.schedule(function()
 			if r.code ~= 0 then
 				vim.notify("shepherd: " .. ((r.stderr or ""):gsub("%s+$", "")), vim.log.levels.ERROR)
@@ -133,11 +173,71 @@ local function list(cb)
 	end)
 end
 
+-- label renders an item for the picker, appending only non-empty fields:
+-- subtask indent, [board] (--all view), <status>, @category, !priority, and
+-- due/defer dates.
 local function label(it)
-	local mark = it.done and "[x]" or "[ ]"
-	local cat = (it.category and it.category ~= "") and (" @" .. it.category) or ""
-	local pr = (it.priority and it.priority ~= "") and (" !" .. it.priority:lower()) or ""
-	return string.format("%s %s%s%s", mark, it.text, cat, pr)
+	local parts = { it._sub and ("  " .. (it.done and "[x]" or "[ ]")) or (it.done and "[x]" or "[ ]"), it.text }
+	if it.board and it.board ~= "" then
+		parts[#parts + 1] = "[" .. it.board .. "]"
+	end
+	if it.status and it.status ~= "" and not it.done then
+		parts[#parts + 1] = "<" .. it.status .. ">"
+	end
+	if it.category and it.category ~= "" then
+		parts[#parts + 1] = "@" .. it.category
+	end
+	if it.priority and it.priority ~= "" then
+		parts[#parts + 1] = "!" .. it.priority:lower()
+	end
+	if it.due and it.due ~= "" then
+		parts[#parts + 1] = "due:" .. it.due
+	end
+	if it.defer and it.defer ~= "" then
+		parts[#parts + 1] = "defer:" .. it.defer
+	end
+	return table.concat(parts, " ")
+end
+
+-- flatten yields picker rows: each parent followed by its subtasks. _ref is the
+-- CLI address ("n" for parents, "n.m" for subtasks); _sub marks subtask rows.
+local function flatten(items)
+	local rows = {}
+	for _, it in ipairs(items) do
+		it._ref = tostring(it.index)
+		rows[#rows + 1] = it
+		for _, sub in ipairs(it.subtasks or {}) do
+			sub._ref = it.index .. "." .. sub.index
+			sub._sub = true
+			rows[#rows + 1] = sub
+		end
+	end
+	return rows
+end
+
+-- edit_seed reconstructs a quick-add line from an item so the edit prompt is
+-- pre-filled. note: consumes the rest of the line, so it goes last.
+local function edit_seed(it)
+	local parts = { it.text or "" }
+	if it.category and it.category ~= "" then
+		parts[#parts + 1] = "@" .. it.category
+	end
+	if it.priority and it.priority ~= "" then
+		parts[#parts + 1] = "!" .. it.priority:lower()
+	end
+	if it.due and it.due ~= "" then
+		parts[#parts + 1] = "due:" .. it.due
+	end
+	if it.defer and it.defer ~= "" then
+		parts[#parts + 1] = "defer:" .. it.defer
+	end
+	if it.link and it.link ~= "" then
+		parts[#parts + 1] = "link:" .. it.link
+	end
+	if it.note and it.note ~= "" then
+		parts[#parts + 1] = "note:" .. it.note
+	end
+	return table.concat(parts, " ")
 end
 
 -- statusline counts, refreshed async. `ready` gates the first render.
@@ -172,7 +272,7 @@ end
 
 -- refresh recomputes the open/overdue counts and fires User
 -- ShepherdStatusUpdate so a statusline can redraw. Counts cover the configured
--- project's whole board (not scoped to `config.filter`).
+-- board's whole board (not scoped to `config.filter`).
 function M.refresh()
 	list(function(items)
 		counts.open, counts.overdue = tally(items, os.date("%Y-%m-%d"))
@@ -191,25 +291,67 @@ function M.status()
 	return format_status(counts.open, counts.overdue, config.status.icon)
 end
 
--- pick shows all items, then a done/undone/rm action on the chosen one.
-function M.pick()
+-- pick shows items (with subtasks) then an action menu on the chosen one:
+-- toggle done, edit, set status, add a subtask, remove, or open its link.
+-- With `all`, the aggregate view is read-only (indexes aren't valid for
+-- mutations) so only open-link is offered. An optional `filter` narrows the list.
+function M.pick(filter, all)
 	list(function(items)
 		if #items == 0 then
 			vim.notify("shepherd: no items")
 			return
 		end
-		vim.ui.select(items, { prompt = "shepherd", format_item = label }, function(choice)
+		vim.ui.select(flatten(items), { prompt = "shepherd", format_item = label }, function(choice)
 			if not choice then
 				return
 			end
+			if all then
+				if choice.link and choice.link ~= "" then
+					vim.ui.open(choice.link)
+				else
+					vim.notify("shepherd: --all view is read-only")
+				end
+				return
+			end
+			local ref = choice._ref
 			local toggle = choice.done and "undone" or "done"
-			vim.ui.select({ toggle, "rm" }, { prompt = choice.text }, function(act)
-				if act then
-					run({ act, tostring(choice.index) }, act .. " " .. choice.index)
+			local actions = { toggle, "edit", "status", "rm" }
+			if not choice._sub then
+				actions[#actions + 1] = "subtask"
+			end
+			if choice.link and choice.link ~= "" then
+				actions[#actions + 1] = "open link"
+			end
+			vim.ui.select(actions, { prompt = choice.text }, function(act)
+				if not act then
+					return
+				end
+				if act == "edit" then
+					vim.ui.input({ prompt = "edit: ", default = edit_seed(choice) }, function(v)
+						if v and v ~= "" then
+							run({ "edit", ref, v }, "edited " .. ref)
+						end
+					end)
+				elseif act == "status" then
+					vim.ui.input({ prompt = "status: ", default = choice.status or "" }, function(v)
+						if v ~= nil then
+							run({ "edit", ref, "status:" .. v }, "status " .. ref)
+						end
+					end)
+				elseif act == "subtask" then
+					vim.ui.input({ prompt = "subtask: " }, function(v)
+						if v and v ~= "" then
+							run({ "sub", tostring(choice.index), v }, "added subtask")
+						end
+					end)
+				elseif act == "open link" then
+					vim.ui.open(choice.link)
+				else
+					run({ act, ref }, act .. " " .. ref)
 				end
 			end)
 		end)
-	end)
+	end, filter, all)
 end
 
 -- clean strips a leading comment marker and TODO/FIXME tag so a code comment
@@ -257,13 +399,25 @@ function M.setup(opts)
 		end
 	end, { nargs = "*", desc = "add a todo (args or prompt)" })
 
-	vim.api.nvim_create_user_command("ShepherdList", function()
-		M.pick()
-	end, { desc = "pick a todo and act on it" })
+	vim.api.nvim_create_user_command("ShepherdList", function(a)
+		M.pick(a.args ~= "" and a.args or nil, a.bang)
+	end, { nargs = "?", bang = true, desc = "pick a todo and act on it (! = all boards, optional filter)" })
 
 	vim.api.nvim_create_user_command("ShepherdCapture", function(a)
 		M.capture({ range = a.range, line1 = a.line1, line2 = a.line2 })
 	end, { nargs = 0, range = true, desc = "capture current line / selection as a todo" })
+
+	vim.api.nvim_create_user_command("ShepherdStats", function()
+		M.stats()
+	end, { desc = "open the stats dashboard" })
+
+	vim.api.nvim_create_user_command("ShepherdBoards", function()
+		require("shepherd.board").switch()
+	end, { desc = "switch board or manage boards (rename/archive/delete)" })
+
+	vim.api.nvim_create_user_command("ShepherdBoardsArchived", function()
+		require("shepherd.board").archived()
+	end, { desc = "unarchive an archived board" })
 
 	-- keep statusline counts fresh across external edits / other tabs
 	vim.api.nvim_create_autocmd("FocusGained", {
@@ -274,16 +428,23 @@ function M.setup(opts)
 	})
 end
 
+-- _run exposes the CLI runner to the board-management submodule
+-- (shepherd.board), which passes { no_board = true } for board verbs.
+M._run = run
+
 -- _internal exposes pure helpers for the test suite; not part of the public API.
 M._internal = {
 	tally = tally,
 	format_status = format_status,
 	label = label,
+	flatten = flatten,
+	edit_seed = edit_seed,
 	clean = clean,
 	build_cmd = build_cmd,
 	resolve_filter = resolve_filter,
-	with_project = with_project,
+	with_board = with_board,
 	set_config = function(c)
+		active_board = nil
 		config = vim.tbl_deep_extend("force", {}, defaults, c or {})
 	end,
 }

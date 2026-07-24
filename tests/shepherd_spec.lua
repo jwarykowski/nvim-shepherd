@@ -72,6 +72,67 @@ describe("label", function()
 		assert.equals("[x] done thing", internal.label({ done = true, text = "done thing" }))
 		assert.equals("[ ] bare", internal.label({ done = false, text = "bare", category = "", priority = "" }))
 	end)
+
+	it("shows status, due and defer", function()
+		assert.equals(
+			"[ ] ship it <blocked> due:2026-07-20 defer:2026-07-18",
+			internal.label({
+				done = false,
+				text = "ship it",
+				status = "blocked",
+				due = "2026-07-20",
+				defer = "2026-07-18",
+			})
+		)
+	end)
+
+	it("hides status on done items", function()
+		assert.equals("[x] shipped", internal.label({ done = true, text = "shipped", status = "blocked" }))
+	end)
+
+	it("shows the board tag in the aggregate view", function()
+		assert.equals("[ ] task [web]", internal.label({ done = false, text = "task", board = "web" }))
+	end)
+
+	it("indents subtask rows", function()
+		assert.equals("  [ ] a sub", internal.label({ done = false, text = "a sub", _sub = true }))
+	end)
+end)
+
+describe("flatten", function()
+	it("orders each parent before its subtasks with n / n.m refs", function()
+		local rows = internal.flatten({
+			{ index = 1, text = "parent", subtasks = { { index = 1, text = "kid" } } },
+			{ index = 2, text = "solo" },
+		})
+		assert.equals(3, #rows)
+		assert.equals("1", rows[1]._ref)
+		assert.equals("1.1", rows[2]._ref)
+		assert.is_true(rows[2]._sub)
+		assert.equals("2", rows[3]._ref)
+		assert.is_nil(rows[3]._sub)
+	end)
+end)
+
+describe("edit_seed", function()
+	it("reconstructs a quick-add line with note last", function()
+		assert.equals(
+			"buy milk @home !h due:2026-07-20 defer:2026-07-18 link:http://x note:from the shop",
+			internal.edit_seed({
+				text = "buy milk",
+				category = "home",
+				priority = "H",
+				due = "2026-07-20",
+				defer = "2026-07-18",
+				link = "http://x",
+				note = "from the shop",
+			})
+		)
+	end)
+
+	it("omits empty fields", function()
+		assert.equals("bare", internal.edit_seed({ text = "bare", category = "", priority = "" }))
+	end)
 end)
 
 describe("build_cmd / resolve_filter", function()
@@ -103,48 +164,48 @@ describe("build_cmd / resolve_filter", function()
 		assert.same({ "shepherd", "--filter", "other" }, internal.build_cmd("other"))
 	end)
 
-	it("passes a string project", function()
-		internal.set_config({ project = "web" })
-		assert.same({ "shepherd", "--project", "web" }, internal.build_cmd())
+	it("passes a string board", function()
+		internal.set_config({ board = "web" })
+		assert.same({ "shepherd", "--board", "web" }, internal.build_cmd())
 	end)
 
-	it("evaluates a function project", function()
+	it("evaluates a function board", function()
 		internal.set_config({
-			project = function()
+			board = function()
 				return "web"
 			end,
 		})
-		assert.same({ "shepherd", "--project", "web" }, internal.build_cmd())
+		assert.same({ "shepherd", "--board", "web" }, internal.build_cmd())
 	end)
 
-	it("combines project and filter", function()
-		internal.set_config({ project = "web", filter = "work" })
-		assert.same({ "shepherd", "--project", "web", "--filter", "work" }, internal.build_cmd())
+	it("combines board and filter", function()
+		internal.set_config({ board = "web", filter = "work" })
+		assert.same({ "shepherd", "--board", "web", "--filter", "work" }, internal.build_cmd())
 	end)
 
-	it("emits --all for the global view, dropping the project", function()
-		internal.set_config({ project = "web" })
+	it("emits --all for the global view, dropping the board", function()
+		internal.set_config({ board = "web" })
 		assert.same({ "shepherd", "--all" }, internal.build_cmd(nil, true))
 	end)
 
 	it("keeps the filter in the global view", function()
-		internal.set_config({ project = "web", filter = "work" })
+		internal.set_config({ board = "web", filter = "work" })
 		assert.same({ "shepherd", "--all", "--filter", "work" }, internal.build_cmd(nil, true))
 	end)
 end)
 
-describe("with_project", function()
+describe("with_board", function()
 	after_each(function()
 		internal.set_config({})
 	end)
 
-	it("appends --project after the verb args", function()
-		internal.set_config({ project = "web" })
-		assert.same({ "shepherd", "add", "x", "--project", "web" }, internal.with_project({ "shepherd", "add", "x" }))
+	it("appends --board after the verb args", function()
+		internal.set_config({ board = "web" })
+		assert.same({ "shepherd", "add", "x", "--board", "web" }, internal.with_board({ "shepherd", "add", "x" }))
 	end)
 
-	it("is a no-op without a project", function()
+	it("is a no-op without a board", function()
 		internal.set_config({})
-		assert.same({ "shepherd", "list", "--json" }, internal.with_project({ "shepherd", "list", "--json" }))
+		assert.same({ "shepherd", "list", "--json" }, internal.with_board({ "shepherd", "list", "--json" }))
 	end)
 end)
