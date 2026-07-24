@@ -318,6 +318,7 @@ function M.pick(filter, all)
 			local actions = { toggle, "edit", "status", "rm" }
 			if not choice._sub then
 				actions[#actions + 1] = "subtask"
+				actions[#actions + 1] = "archive"
 			end
 			if choice.link and choice.link ~= "" then
 				actions[#actions + 1] = "open link"
