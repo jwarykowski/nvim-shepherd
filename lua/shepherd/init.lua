@@ -6,6 +6,7 @@ local defaults = {
 	board = nil, -- string | fun():string | nil
 	float = { width = 0.8, height = 0.8, border = "rounded" },
 	status = { icon = "" }, -- prefix for M.status(), e.g. a nerd-font glyph
+	watch = false, -- stream `shepherd watch` to keep the statusline live
 }
 
 local config = vim.tbl_deep_extend("force", {}, defaults)
@@ -13,6 +14,10 @@ local config = vim.tbl_deep_extend("force", {}, defaults)
 -- active_board is a session override set by the board switcher. When non-nil
 -- it wins over config.board; "default" means the unscoped default board.
 local active_board = nil
+
+-- watch state, forward-declared so set_active_board (below) can restart the
+-- stream; defined near M.status.
+local watch_job, watch_start, watch_stop
 
 -- binary returns the configured shepherd command (used by the health check).
 function M.binary()
@@ -23,6 +28,9 @@ end
 -- config.board until changed again.
 function M.set_active_board(name)
 	active_board = name
+	if watch_job then
+		watch_start() -- re-scope the stream to the new board
+	end
 end
 
 -- with_board appends "--board <name>" to cmd when one is in effect: the
@@ -300,6 +308,34 @@ function M.refresh()
 	end)
 end
 
+-- watch streams `shepherd watch` (NDJSON, board-scoped) and refreshes counts on
+-- every change, so edits from the board TUI or another process update the
+-- statusline without waiting for FocusGained. Opt-in via config.watch.
+-- watch_job/watch_start/watch_stop are forward-declared near the top.
+function watch_stop()
+	if watch_job then
+		pcall(function()
+			watch_job:kill(15)
+		end)
+		watch_job = nil
+	end
+end
+
+function watch_start()
+	watch_stop()
+	local cmd = with_board({ config.cmd, "watch" })
+	watch_job = vim.system(cmd, {
+		text = true,
+		stdout = function(_, data)
+			if data and data ~= "" then
+				vim.schedule(M.refresh)
+			end
+		end,
+	}, function()
+		watch_job = nil
+	end)
+end
+
 -- status returns a statusline string: "" when empty/loading, else the open
 -- count with the configured icon and an overdue suffix.
 function M.status()
@@ -440,12 +476,18 @@ function M.setup(opts)
 	end, { desc = "unarchive an archived board" })
 
 	-- keep statusline counts fresh across external edits / other tabs
+	local group = vim.api.nvim_create_augroup("shepherd", { clear = true })
 	vim.api.nvim_create_autocmd("FocusGained", {
-		group = vim.api.nvim_create_augroup("shepherd", { clear = true }),
+		group = group,
 		callback = function()
 			M.refresh()
 		end,
 	})
+
+	if config.watch then
+		watch_start()
+		vim.api.nvim_create_autocmd("VimLeavePre", { group = group, callback = watch_stop })
+	end
 end
 
 -- _run exposes the CLI runner to the board-management submodule
