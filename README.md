@@ -42,7 +42,7 @@ return {
 		{ "<leader>tc", "<cmd>ShepherdCapture<cr>", desc = "shepherd capture line" },
 		{ "<leader>tc", ":ShepherdCapture<cr>", mode = "x", desc = "shepherd capture selection" },
 		{ "<leader>ts", "<cmd>ShepherdStats<cr>", desc = "shepherd stats" },
-		{ "<leader>tp", "<cmd>ShepherdBoards<cr>", desc = "shepherd boards" },
+		{ "<leader>tb", "<cmd>ShepherdBoards<cr>", desc = "shepherd boards" },
 	},
 	opts = {
 		-- per-repo board (own file under ~/.config/shepherd/boards/)
