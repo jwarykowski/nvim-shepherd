@@ -92,9 +92,12 @@ local function build_cmd(filter_override, all)
 	return parts
 end
 
--- float_term runs argv in a terminal inside a centered floating window that
--- closes when the process exits, then refreshes counts. Shared by open/stats.
-local function float_term(argv)
+-- float_term runs argv in a terminal inside a centered floating window, then
+-- refreshes counts. Shared by open/stats. Interactive commands (the board) quit
+-- on `q`, so the window closes when the process exits. One-shot commands (stats)
+-- print and exit immediately; pass hold=true to keep the output up until the
+-- user dismisses it with q/esc.
+local function float_term(argv, hold)
 	local cols, rows = vim.o.columns, vim.o.lines
 	local w = math.floor(cols * config.float.width)
 	local h = math.floor(rows * config.float.height)
@@ -108,11 +111,21 @@ local function float_term(argv)
 		style = "minimal",
 		border = config.float.border,
 	})
+	local function close()
+		if vim.api.nvim_win_is_valid(win) then
+			vim.api.nvim_win_close(win, true)
+		end
+	end
 	vim.fn.jobstart(argv, {
 		term = true,
 		on_exit = function()
-			if vim.api.nvim_win_is_valid(win) then
-				vim.api.nvim_win_close(win, true)
+			if hold and vim.api.nvim_win_is_valid(win) then
+				vim.cmd("stopinsert")
+				for _, k in ipairs({ "q", "<esc>", "<cr>" }) do
+					vim.keymap.set("n", k, close, { buffer = buf, nowait = true })
+				end
+			else
+				close()
 			end
 			M.refresh() -- board edits change counts
 		end,
@@ -124,9 +137,15 @@ function M.open(filter, all)
 	float_term(build_cmd(filter, all))
 end
 
--- stats opens shepherd's native terminal chart view in the float.
-function M.stats()
-	float_term({ config.cmd, "stats" })
+-- stats opens shepherd's native terminal chart view in the float. With `all`,
+-- aggregates every board (shepherd stats --all). stats is one-shot, so the float
+-- holds until dismissed.
+function M.stats(all)
+	local argv = { config.cmd, "stats" }
+	if all then
+		argv[#argv + 1] = "--all"
+	end
+	float_term(argv, true)
 end
 
 function M.add(text)
@@ -408,9 +427,9 @@ function M.setup(opts)
 		M.capture({ range = a.range, line1 = a.line1, line2 = a.line2 })
 	end, { nargs = 0, range = true, desc = "capture current line / selection as a todo" })
 
-	vim.api.nvim_create_user_command("ShepherdStats", function()
-		M.stats()
-	end, { desc = "open the stats dashboard" })
+	vim.api.nvim_create_user_command("ShepherdStats", function(a)
+		M.stats(a.bang)
+	end, { bang = true, desc = "open the stats dashboard (! = all boards)" })
 
 	vim.api.nvim_create_user_command("ShepherdBoards", function()
 		require("shepherd.board").switch()

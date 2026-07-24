@@ -80,6 +80,7 @@ return {
   across all boards (read-only — items show their `[board]`; only open-link is
   offered).
 - `:ShepherdStats` — open shepherd's stats charts in the floating terminal.
+  `:ShepherdStats!` aggregates every board (`shepherd stats --all`).
 - `:ShepherdBoards` — pick a board (shows `open/total`, `*` marks current, and
   its working **dir** if set), then **switch** the session to it, **rename**,
   set its **dir** (working directory; empty clears), **archive**, or **delete**
