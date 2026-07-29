@@ -15,6 +15,9 @@ vim.o.shadafile = "NONE"
 vim.o.termguicolors = true
 vim.o.number = true
 vim.o.showmode = false
+-- keyboard only: with the mouse off, vim.ui.select prompts "Type number and
+-- <Enter>" rather than offering a click
+vim.o.mouse = ""
 vim.o.laststatus = 3
 vim.o.statusline = "  %t%=%{v:lua.require'shepherd'.status()}  "
 

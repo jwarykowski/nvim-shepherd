@@ -7,16 +7,17 @@ buffer. Zero dependencies; drives the installed `shepherd` binary.
 - [requirements](#requirements)
 - [install](#install)
 - [usage](#usage)
+- [stats](#stats)
 - [statusline](#statusline)
 - [configuration](#configuration)
 - [development](#development)
+
+![nvim-shepherd in action](assets/demo.gif)
 
 ## requirements
 
 - Neovim ≥ 0.11 (`vim.fn.jobstart({ term = true })`, `vim.system`).
 - `shepherd` on `$PATH` — `brew install jwarykowski/tap/shepherd`.
-
-![nvim-shepherd in action](assets/demo.gif)
 
 ## install
 
@@ -81,8 +82,8 @@ return {
 - `:ShepherdList work` — pick within a filtered view. `:ShepherdList!` picks
   across all boards (read-only — items show their `[board]`; only open-link is
   offered).
-- `:ShepherdStats` — open shepherd's stats charts in the floating terminal.
-  `:ShepherdStats!` aggregates every board (`shepherd stats --all`).
+- `:ShepherdStats` — open shepherd's stats charts in the floating terminal (see
+  [stats](#stats)). `:ShepherdStats!` aggregates every board.
 - `:ShepherdBoards` — pick a board (shows `open/total`, `*` marks current, and
   its working **dir** if set), then **switch** the session to it, **rename**,
   set its **dir** (working directory; empty clears), **archive**, or **delete**
@@ -95,6 +96,19 @@ return {
   `TODO:`/`FIXME:`, then opens the add prompt pre-filled so you can tweak it.
 
 Run `:checkhealth shepherd` to verify the binary is found.
+
+## stats
+
+`:ShepherdStats` runs `shepherd stats` in the floating terminal — completion, due
+and urgency, priority load, aging, status mix, throughput and backlog trend for
+the active board. `:ShepherdStats!` aggregates every board and adds a by-board
+breakdown.
+
+![:ShepherdStats](assets/stats.gif)
+
+The charts are one-shot output, so the float holds until you dismiss it with `q`,
+`<esc>` or `<cr>` — unlike `:Shepherd`, which closes when the board exits.
+Done-based counts include the archive.
 
 ## statusline
 
@@ -158,36 +172,12 @@ require("shepherd").setup({
 
 ## development
 
-Tooling: [stylua](https://github.com/JohnnyMorganz/StyLua),
-[luacheck](https://github.com/lunarmodules/luacheck), and
-[busted](https://lunarmodules.github.io/busted/) + `nlua` (tests run under
-Neovim). Install the test deps with `luarocks install busted nlua`.
-
 ```sh
-make fmt     # format
+make fmt     # stylua
 make lint    # stylua --check + luacheck
 make test    # busted
 make check   # lint + test
 ```
 
-CI (`.github/workflows/pull-request.yml`) runs lint plus the suite on Neovim
-stable and nightly. Tests cover the pure helpers (`tally`, `format_status`, `label`,
-`flatten`, `edit_seed`, `clean`, `build_cmd`/filter resolution) via the
-`_internal` table.
-
-### demo gif
-
-`assets/demo.gif` is scripted with [vhs](https://github.com/charmbracelet/vhs),
-not screen-captured — regenerate it after any change to the commands, the picker
-or the statusline:
-
-```sh
-brew install vhs     # pulls in ttyd + ffmpeg
-vhs assets/demo.tape
-```
-
-The tape runs nvim with `assets/demo-init.lua` (this checkout, no plugin manager
-and no other plugins) against a board seeded by `assets/demo-seed.sh` under
-`mktemp -d`, so recording never touches a real board or config. The seed writes
-its dates relative to today, so the board keeps its due dates and aging whenever
-the gif is re-recorded.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the layout, the test approach, the
+conventions, and how to re-record the demo gif.
