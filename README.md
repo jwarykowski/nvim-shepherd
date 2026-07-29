@@ -7,9 +7,12 @@ buffer. Zero dependencies; drives the installed `shepherd` binary.
 - [requirements](#requirements)
 - [install](#install)
 - [usage](#usage)
+- [stats](#stats)
 - [statusline](#statusline)
 - [configuration](#configuration)
 - [development](#development)
+
+![nvim-shepherd in action](assets/demo.gif)
 
 ## requirements
 
@@ -79,8 +82,8 @@ return {
 - `:ShepherdList work` — pick within a filtered view. `:ShepherdList!` picks
   across all boards (read-only — items show their `[board]`; only open-link is
   offered).
-- `:ShepherdStats` — open shepherd's stats charts in the floating terminal.
-  `:ShepherdStats!` aggregates every board (`shepherd stats --all`).
+- `:ShepherdStats` — open shepherd's stats charts in the floating terminal (see
+  [stats](#stats)). `:ShepherdStats!` aggregates every board.
 - `:ShepherdBoards` — pick a board (shows `open/total`, `*` marks current, and
   its working **dir** if set), then **switch** the session to it, **rename**,
   set its **dir** (working directory; empty clears), **archive**, or **delete**
@@ -93,6 +96,19 @@ return {
   `TODO:`/`FIXME:`, then opens the add prompt pre-filled so you can tweak it.
 
 Run `:checkhealth shepherd` to verify the binary is found.
+
+## stats
+
+`:ShepherdStats` runs `shepherd stats` in the floating terminal — completion, due
+and urgency, priority load, aging, status mix, throughput and backlog trend for
+the active board. `:ShepherdStats!` aggregates every board and adds a by-board
+breakdown.
+
+![:ShepherdStats](assets/stats.gif)
+
+The charts are one-shot output, so the float holds until you dismiss it with `q`,
+`<esc>` or `<cr>` — unlike `:Shepherd`, which closes when the board exits.
+Done-based counts include the archive.
 
 ## statusline
 
@@ -156,19 +172,12 @@ require("shepherd").setup({
 
 ## development
 
-Tooling: [stylua](https://github.com/JohnnyMorganz/StyLua),
-[luacheck](https://github.com/lunarmodules/luacheck), and
-[busted](https://lunarmodules.github.io/busted/) + `nlua` (tests run under
-Neovim). Install the test deps with `luarocks install busted nlua`.
-
 ```sh
-make fmt     # format
+make fmt     # stylua
 make lint    # stylua --check + luacheck
 make test    # busted
 make check   # lint + test
 ```
 
-CI (`.github/workflows/pull-request.yml`) runs lint plus the suite on Neovim
-stable and nightly. Tests cover the pure helpers (`tally`, `format_status`, `label`,
-`flatten`, `edit_seed`, `clean`, `build_cmd`/filter resolution) via the
-`_internal` table.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the layout, the test approach, the
+conventions, and how to re-record the demo gif.
