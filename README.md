@@ -16,6 +16,8 @@ buffer. Zero dependencies; drives the installed `shepherd` binary.
 - Neovim ≥ 0.11 (`vim.fn.jobstart({ term = true })`, `vim.system`).
 - `shepherd` on `$PATH` — `brew install jwarykowski/tap/shepherd`.
 
+![nvim-shepherd in action](assets/demo.gif)
+
 ## install
 
 lazy.nvim — add the spec. With a structured config (e.g. LazyVim), drop it in
@@ -172,3 +174,20 @@ CI (`.github/workflows/pull-request.yml`) runs lint plus the suite on Neovim
 stable and nightly. Tests cover the pure helpers (`tally`, `format_status`, `label`,
 `flatten`, `edit_seed`, `clean`, `build_cmd`/filter resolution) via the
 `_internal` table.
+
+### demo gif
+
+`assets/demo.gif` is scripted with [vhs](https://github.com/charmbracelet/vhs),
+not screen-captured — regenerate it after any change to the commands, the picker
+or the statusline:
+
+```sh
+brew install vhs     # pulls in ttyd + ffmpeg
+vhs assets/demo.tape
+```
+
+The tape runs nvim with `assets/demo-init.lua` (this checkout, no plugin manager
+and no other plugins) against a board seeded by `assets/demo-seed.sh` under
+`mktemp -d`, so recording never touches a real board or config. The seed writes
+its dates relative to today, so the board keeps its due dates and aging whenever
+the gif is re-recorded.
