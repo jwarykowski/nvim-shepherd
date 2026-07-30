@@ -324,16 +324,34 @@ end
 function watch_start()
 	watch_stop()
 	local cmd = with_board({ config.cmd, "watch" })
-	watch_job = vim.system(cmd, {
+	local job
+	job = vim.system(cmd, {
 		text = true,
 		stdout = function(_, data)
 			if data and data ~= "" then
 				vim.schedule(M.refresh)
 			end
 		end,
-	}, function()
+	}, function(r)
+		-- a restart's kill lands after the replacement is live, so only the
+		-- current job may clear the handle — and only its death is worth
+		-- reporting: a killed predecessor is expected, a live stream dying
+		-- (no `watch` verb on an older binary) would otherwise fail silently
+		if watch_job ~= job then
+			return
+		end
 		watch_job = nil
+		if r.code ~= 0 then
+			local why = (r.stderr or ""):gsub("%s+$", "")
+			vim.schedule(function()
+				vim.notify(
+					"shepherd: watch stopped — " .. (why ~= "" and why or "exit " .. r.code),
+					vim.log.levels.ERROR
+				)
+			end)
+		end
 	end)
+	watch_job = job
 end
 
 -- status returns a statusline string: "" when empty/loading, else the open
