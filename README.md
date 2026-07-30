@@ -123,8 +123,10 @@ Done-based counts include the archive.
 
 `require("shepherd").status()` returns a short string — the open count, plus an
 overdue suffix — or `""` when there's nothing open or the count hasn't loaded
-yet. Counts refresh after any add/done/rm you make and on `FocusGained`; call
-`require("shepherd").refresh()` to force it.
+yet. Counts refresh live on every board change — yours, the board TUI's, or
+another process's — plus on `FocusGained`; call
+`require("shepherd").refresh()` to force it. Set `watch = false` (see
+[configuration](#configuration)) to drop back to `FocusGained` only.
 
 lualine:
 
@@ -165,6 +167,7 @@ require("shepherd").setup({
 	board = nil,             -- string | fun():string | nil — passed as --board
 	float = { width = 0.8, height = 0.8, border = "rounded" },
 	status = { icon = "" },  -- prefix for status(); e.g. a nerd-font glyph
+	watch = true,            -- stream `shepherd watch` to keep the statusline live
 })
 ```
 
@@ -178,6 +181,12 @@ require("shepherd").setup({
 - `float` — fractions of the editor size, and the window border.
 - `status.icon` — prefix for `status()`. With an icon it renders `<icon> 3`;
   empty renders `3 todo`.
+- `watch` — streams `shepherd watch` in the background and refreshes the
+  statusline counts on every board change (from the TUI or another process), not
+  just on `FocusGained`. Re-scopes to the active board on switch, and stops on
+  exit. One extra process per Neovim, polling the board file once a second; set
+  it to `false` to skip that. Needs shepherd ≥ 0.16 (the `watch` verb); with no
+  `shepherd` on `$PATH` it simply doesn't start.
 
 ## development
 
