@@ -6,7 +6,7 @@ local defaults = {
 	board = nil, -- string | fun():string | nil
 	float = { width = 0.8, height = 0.8, border = "rounded" },
 	status = { icon = "" }, -- prefix for M.status(), e.g. a nerd-font glyph
-	watch = false, -- stream `shepherd watch` to keep the statusline live
+	watch = true, -- stream `shepherd watch` to keep the statusline live
 }
 
 local config = vim.tbl_deep_extend("force", {}, defaults)
@@ -323,6 +323,11 @@ end
 
 function watch_start()
 	watch_stop()
+	-- on by default, so a missing binary must stay a checkhealth problem rather
+	-- than an ENOENT thrown out of setup() on every startup
+	if vim.fn.executable(config.cmd) ~= 1 then
+		return
+	end
 	local cmd = with_board({ config.cmd, "watch" })
 	local job
 	job = vim.system(cmd, {
