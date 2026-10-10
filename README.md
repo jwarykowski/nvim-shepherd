@@ -199,3 +199,8 @@ make check   # lint + test
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the layout, the test approach, the
 conventions, and how to re-record the demo gif.
+
+## support
+
+nvim-shepherd is free and MIT licensed. If it keeps your todos close to your code, you can
+[sponsor its development](https://github.com/sponsors/jwarykowski).
