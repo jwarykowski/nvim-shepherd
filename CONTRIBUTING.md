@@ -27,7 +27,7 @@ run under Neovim) — `luarocks install busted nlua`. Formatting and linting nee
 ## tests
 
 `tests/shepherd_spec.lua` drives the pure helpers — `tally`, `format_status`,
-`label`, `flatten`, `edit_seed`, `clean`, and `build_cmd`/filter resolution —
+`label`, `flatten`, `edit_seed`, `clean`, `agent_argv`/`is_ref`, and `build_cmd`/filter resolution —
 exposed on the `_internal` table. Keep new logic in a pure helper where you can:
 anything that only reshapes data is testable without a running UI, and the
 command wiring around it stays thin.

@@ -27,6 +27,7 @@ buffer. Zero dependencies; drives the installed `shepherd` binary.
 
 - Neovim ≥ 0.11 (`vim.fn.jobstart({ term = true })`, `vim.system`).
 - `shepherd` on `$PATH` — `brew install jwarykowski/tap/shepherd`.
+  `:ShepherdAgent` needs a release with `shepherd agent`.
 
 ## install
 
@@ -45,6 +46,7 @@ return {
 		"ShepherdStats",
 		"ShepherdBoards",
 		"ShepherdBoardsArchived",
+		"ShepherdAgent",
 	},
 	keys = {
 		{ "<leader>T", "<cmd>Shepherd<cr>", desc = "shepherd board" },
@@ -55,6 +57,7 @@ return {
 		{ "<leader>tc", ":ShepherdCapture<cr>", mode = "x", desc = "shepherd capture selection" },
 		{ "<leader>ts", "<cmd>ShepherdStats<cr>", desc = "shepherd stats" },
 		{ "<leader>tb", "<cmd>ShepherdBoards<cr>", desc = "shepherd boards" },
+		{ "<leader>tA", "<cmd>ShepherdAgent<cr>", desc = "shepherd hand a todo to an agent" },
 	},
 	opts = {
 		-- per-repo board (own file under ~/.config/shepherd/boards/)
@@ -84,8 +87,8 @@ return {
 - `:ShepherdList` — pick an item (`vim.ui.select`), then act on it: toggle
   done/undone, **edit** (a pre-filled quick-add line — text, `@category`,
   `!priority`, `due:`, `defer:`, `link:`, `note:`), set a **status**, add a
-  **subtask**, **archive** it (whole items only), **rm**, or **open link** when
-  it has one. Subtasks show indented
+  **subtask**, **archive** it (whole items only), **rm**, hand it to an
+  **agent** (open items; see `:ShepherdAgent`), or **open link** when it has one. Subtasks show indented
   under their parent and take the same actions. Uses whatever `vim.ui.select` UI
   you have (dressing, snacks, telescope-ui-select), or the built-in menu.
 - `:ShepherdList work` — pick within a filtered view. `:ShepherdList!` picks
@@ -100,6 +103,14 @@ return {
   overrides the configured `board` until you switch again or restart, and
   `:tcd`s to the board's dir when it has one.
 - `:ShepherdBoardsArchived` — pick an archived board to unarchive.
+- `:ShepherdAgent` — pick an open item or subtask and hand it to a coding agent
+  with `shepherd agent`. Inside [herdr](https://herdr.dev) that's a new git
+  worktree with the agent started in its own pane, running in the background;
+  outside herdr the agent runs in the floating terminal. The item is marked
+  in-progress, and a subtask goes with its parent as context.
+  `:ShepherdAgent 3` / `:ShepherdAgent 3.2` hand off that item directly;
+  `:ShepherdAgent work` picks within a filter. Which agent and the branch prefix
+  come from shepherd's `agent_kind` / `agent_branch_prefix` config.
 - `:ShepherdCapture` — turn the current line into a todo; in visual mode
   (`:'<,'>ShepherdCapture`) the selection. Strips a leading comment marker and
   `TODO:`/`FIXME:`, then opens the add prompt pre-filled so you can tweak it.

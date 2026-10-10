@@ -394,6 +394,9 @@ function M.pick(filter, all)
 			local ref = choice._ref
 			local toggle = choice.done and "undone" or "done"
 			local actions = { toggle, "edit", "status", "rm" }
+			if not choice.done then
+				actions[#actions + 1] = "agent"
+			end
 			if not choice._sub then
 				actions[#actions + 1] = "subtask"
 				actions[#actions + 1] = "archive"
@@ -425,12 +428,68 @@ function M.pick(filter, all)
 					end)
 				elseif act == "open link" then
 					vim.ui.open(choice.link)
+				elseif act == "agent" then
+					M.agent(ref)
 				else
 					run({ act, ref }, act .. " " .. ref)
 				end
 			end)
 		end)
 	end, filter, all)
+end
+
+-- agent_argv builds the `shepherd agent <ref>` hand-off for an item or subtask
+-- ref, board-scoped. in_herdr picks how it runs: inside a herdr pane shepherd
+-- creates the worktree and starts the agent in a new pane, so the call returns
+-- at once and runs async; outside, the agent CLI takes over a terminal, so it
+-- needs the float. Returns argv, interactive.
+local function agent_argv(ref, in_herdr)
+	return with_board({ config.cmd, "agent", ref }), not in_herdr
+end
+
+-- is_ref reports whether s addresses one item rather than filtering: a list
+-- index ("3"), a subtask ("3.2"), or an item id (32 hex chars).
+local function is_ref(s)
+	return s:match("^%d+$") ~= nil or s:match("^%d+%.%d+$") ~= nil or s:match("^" .. ("%x"):rep(32) .. "$") ~= nil
+end
+
+-- agent hands item or subtask ref to a coding agent (shepherd agent): a herdr
+-- worktree + agent when nvim runs in herdr, else the agent in the float.
+function M.agent(ref)
+	local argv, interactive = agent_argv(ref, vim.env.HERDR_ENV == "1")
+	if interactive then
+		float_term(argv, true)
+		return
+	end
+	vim.notify("shepherd: handing " .. ref .. " to an agent…")
+	vim.system(argv, { text = true }, function(r)
+		vim.schedule(function()
+			if r.code == 0 then
+				vim.notify("shepherd: agent started on " .. ref)
+				M.refresh()
+			else
+				vim.notify("shepherd: " .. ((r.stderr or ""):gsub("%s+$", "")), vim.log.levels.ERROR)
+			end
+		end)
+	end)
+end
+
+-- pick_agent picks an open item or subtask and hands it to an agent.
+function M.pick_agent(filter)
+	list(function(items)
+		local rows = vim.tbl_filter(function(it)
+			return not it.done
+		end, flatten(items))
+		if #rows == 0 then
+			vim.notify("shepherd: no open items")
+			return
+		end
+		vim.ui.select(rows, { prompt = "agent", format_item = label }, function(choice)
+			if choice then
+				M.agent(choice._ref)
+			end
+		end)
+	end, filter)
 end
 
 -- clean strips a leading comment marker and TODO/FIXME tag so a code comment
@@ -490,6 +549,14 @@ function M.setup(opts)
 		M.stats(a.bang)
 	end, { bang = true, desc = "open the stats dashboard (! = all boards)" })
 
+	vim.api.nvim_create_user_command("ShepherdAgent", function(a)
+		if is_ref(a.args) then
+			M.agent(a.args)
+		else
+			M.pick_agent(a.args ~= "" and a.args or nil)
+		end
+	end, { nargs = "?", desc = "hand a todo to a coding agent (ref, filter, or pick)" })
+
 	vim.api.nvim_create_user_command("ShepherdBoards", function()
 		require("shepherd.board").switch()
 	end, { desc = "switch board or manage boards (rename/archive/delete)" })
@@ -525,6 +592,8 @@ M._internal = {
 	flatten = flatten,
 	edit_seed = edit_seed,
 	clean = clean,
+	agent_argv = agent_argv,
+	is_ref = is_ref,
 	build_cmd = build_cmd,
 	resolve_filter = resolve_filter,
 	with_board = with_board,
