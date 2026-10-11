@@ -1,13 +1,14 @@
 <table>
 <tr>
-<td width="200" valign="top"><img src="assets/nvim-shepherd.png" alt="nvim-shepherd" width="180"></td>
+<td width="140" valign="top"><img src="assets/nvim-shepherd.svg" alt="nvim-shepherd" width="120"></td>
 <td valign="top">
 
 # 𓋾 nvim-shepherd
 
-Neovim wrapper for [shepherd](https://github.com/jwarykowski/shepherd) — opens
-the todo board in a floating terminal and adds items without leaving your
-buffer. Zero dependencies; drives the installed `shepherd` binary.
+Neovim wrapper for [shepherd](https://github.com/jwarykowski/shepherd), the
+agent-native task queue backed by plain markdown files. Opens the board in a
+floating terminal and adds items without leaving your buffer. Zero
+dependencies; drives the installed `shepherd` binary.
 
 </td>
 </tr>
