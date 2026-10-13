@@ -1,7 +1,4 @@
-<table>
-<tr>
-<td width="140" valign="top"><img src="assets/nvim-shepherd.svg" alt="nvim-shepherd" width="120"></td>
-<td valign="top">
+<p align="center"><img src="assets/nvim-shepherd.svg" alt="nvim-shepherd" width="120"></p>
 
 # 𓋾 nvim-shepherd
 
@@ -9,10 +6,6 @@ Neovim wrapper for [shepherd](https://github.com/jwarykowski/shepherd), the
 agent-native task queue backed by plain markdown files. Opens the board in a
 floating terminal and adds items without leaving your buffer. Zero
 dependencies; drives the installed `shepherd` binary.
-
-</td>
-</tr>
-</table>
 
 - [requirements](#requirements)
 - [install](#install)
