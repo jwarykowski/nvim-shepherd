@@ -4,6 +4,7 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -11,11 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: stylua
-        uses: JohnnyMorganz/stylua-action@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          version: latest
-          args: --check lua/ tests/
+        # a plain download: the action looks releases up on the forge's API
+        run: |
+          curl -fsSL -o /tmp/stylua.zip https://github.com/JohnnyMorganz/StyLua/releases/latest/download/stylua-linux-x86_64.zip
+          unzip -q /tmp/stylua.zip -d /tmp
+          /tmp/stylua --check lua/ tests/
       - uses: leafo/gh-actions-lua@v10
         with:
           luaVersion: "5.1"
